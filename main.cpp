@@ -85,6 +85,28 @@ int send_command(int a1, int a2, int a3, int a4, char *)
     return 0;
 }
 
+void billingSave_stub() { }
+
+// maybe not important?
+typedef int(__cdecl* decryptToken_t)(char* dest, size_t* destSize, const char* src, const char* key);
+decryptToken_t original_decryptToken = nullptr;
+
+
+int __cdecl jmp_decryptToken(char* dest, size_t* destSize, const char* src, const char* key) {
+    // custom solution for priv server (too lazy to reverse enc)
+    if (src != nullptr && src[0] == '@') {
+        size_t slen = strlen(src + 1);
+        memcpy(dest, src + 1, slen);
+        dest[slen] = '\0'; 
+        
+        if (destSize != nullptr) {
+            *destSize = slen;
+        }
+        return 0; 
+    }
+        return original_decryptToken(dest, destSize, src, key);
+}
+
 int lumen_debug_printfmt(const char *format, ...)
 {
     printf("[LMN] ");
@@ -206,8 +228,15 @@ extern "C"
 
             // mucha
             // mucha5.local
-            Line::Patch((void *)0x8fa2fa8, {0x6D, 0x75, 0x63, 0x68, 0x61, 0x35, 0x2E, 0x6C, 0x6F, 0x63, 0x61, 0x6C, 0x00});
-            Line::Patch((void *)0x8f98ca7, {0x41, 0x56, 0x4B, 0x6F, 0x6E, 0x74, 0x6F, 0x6C, 0x33, 0x38, 0x38, 0x00});
+            Line::PatchString((void *)0x8fa2fa8, "mucha.local");
+
+            Line::Patch((void*)0x08E4C51A, { 0xEB, 0x71 }); //i forgot
+            Line::Patch((void*)0x08E4C567, { 0xEB, 0x24 }); //i forgot
+            Line::Patch((void*)0x08E70150, { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 }); //fix amauth crash
+
+            Line::Hook((void*)0x8401A70, (void*)billingSave_stub); //billing
+
+            Line::Hook((void*)0x8E26CBE, (void*)jmp_decryptToken, (void**)&original_decryptToken); //not sure useful or not
 
             Line::Hook((void *)0x8de5c30, (void *)lumen_debug_printfmt);
 
